@@ -200,6 +200,7 @@ configureNAT() {
 
   # Create the necessary file structure for /dev/net/tun
   if [ ! -c /dev/net/tun ]; then
+    [[ "$PODMAN" == [Yy1]* ]] && return 1
     [ ! -d /dev/net ] && mkdir -m 755 /dev/net
     if mknod /dev/net/tun c 10 200; then
       chmod 666 /dev/net/tun
@@ -207,15 +208,14 @@ configureNAT() {
   fi
 
   if [ ! -c /dev/net/tun ]; then
-    [[ "$PODMAN" != [Yy1]* ]] && error "$tuntap" 
-    return 1
+    error "$tuntap" && return 1
   fi
 
   # Check port forwarding flag
   if [[ $(< /proc/sys/net/ipv4/ip_forward) -eq 0 ]]; then
     { sysctl -w net.ipv4.ip_forward=1 > /dev/null; rc=$?; } || :
     if (( rc != 0 )) || [[ $(< /proc/sys/net/ipv4/ip_forward) -eq 0 ]]; then
-      [[ "$PODMAN" != [Yy1]* ]] && error "IP forwarding is disabled. $ADD_ERR --sysctl net.ipv4.ip_forward=1" 
+      error "IP forwarding is disabled. $ADD_ERR --sysctl net.ipv4.ip_forward=1"
       return 1
     fi
   fi
@@ -342,17 +342,17 @@ closeNetwork() {
 
 checkOS() {
 
-  local name
+  local kernel
   local os=""
   local if="macvlan"
-  name=$(uname -a)
+  kernel=$(uname -a)
 
-  [[ "${name,,}" == *"darwin"* ]] && os="Docker Desktop for macOS"
-  [[ "${name,,}" == *"microsoft"* ]] && os="Docker Desktop for Windows"
+  [[ "${kernel,,}" == *"darwin"* ]] && os="Docker Desktop for macOS"
+  [[ "${kernel,,}" == *"microsoft"* ]] && os="Docker Desktop for Windows"
 
   if [[ "$DHCP" == [Yy1]* ]]; then
     if="macvtap"
-    [[ "${name,,}" == *"synology"* ]] && os="Synology Container Manager"
+    [[ "${kernel,,}" == *"synology"* ]] && os="Synology Container Manager"
   fi
 
   if [ -n "$os" ]; then
@@ -379,7 +379,7 @@ getInfo() {
     error "Network interface '$VM_NET_DEV' does not exist inside the container!"
     error "$ADD_ERR -e \"VM_NET_DEV=NAME\" to specify another interface name." && exit 26
   fi
-  
+
   BASE_IP="${VM_NET_IP%.*}."
 
   if [ "${VM_NET_IP/$BASE_IP/}" -lt "3" ]; then
